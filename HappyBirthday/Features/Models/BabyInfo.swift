@@ -16,9 +16,10 @@ struct BabyDetails: Equatable {
     let name: String
     let birthday: Date
 
-    init?(name: String, birthday: Date, now: Date = .now) {
+    init?(name: String, birthday: Date, now: Date = .now, calendar: Calendar = .current) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, birthday <= now else { return nil }
+        guard !trimmed.isEmpty,
+              BabyAge.allowedBirthdays(now: now, calendar: calendar).contains(birthday) else { return nil }
         self.name = trimmed
         self.birthday = birthday
     }

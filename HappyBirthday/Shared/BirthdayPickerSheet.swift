@@ -18,7 +18,7 @@ struct BirthdayPickerSheet: View {
 
     var body: some View {
         NavigationStack {
-            DatePicker("Birthday", selection: $date, in: ...Date.now, displayedComponents: .date)
+            DatePicker("Birthday", selection: $date, in: BabyAge.allowedBirthdays(), displayedComponents: .date)
                 .datePickerStyle(.wheel)
                 .labelsHidden()
                 .padding(.horizontal)

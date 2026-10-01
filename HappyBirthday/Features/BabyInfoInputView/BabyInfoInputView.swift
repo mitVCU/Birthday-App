@@ -12,6 +12,7 @@ struct BabyInfoInputView: View {
 
     @State private var activeInput: ActiveInput?
     @FocusState private var isNameFocused: Bool
+    @State private var isShowingBirthday = false
 
     private static let horizontalPadding: CGFloat = 20
     private static let photoSize: CGFloat = 120
@@ -23,16 +24,12 @@ struct BabyInfoInputView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 28) {
-                Text("Happy Birthday")
-                    .font(.largeTitle.bold())
-                    .multilineTextAlignment(.center)
-
                 photoButton
 
                 fieldsCard
             }
             .padding(.horizontal, Self.horizontalPadding)
-            .padding(.top, 24)
+            .padding(.top, 8)
             .frame(maxWidth: .infinity)
             .background(
                 Color.clear
@@ -44,6 +41,12 @@ struct BabyInfoInputView: View {
         .scrollDismissesKeyboard(.interactively)
         .safeAreaInset(edge: .bottom) { showBirthdayButton }
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .navigationTitle("Happy Birthday")
+        .navigationDestination(isPresented: $isShowingBirthday) {
+            if let details = babyInfoInputVM.details {
+                BirthdayView(details: details, profile: babyInfoInputVM.profile)
+            }
+        }
         .onChange(of: isNameFocused) { _, focused in
             if focused {
                 activeInput = .name
@@ -102,7 +105,7 @@ struct BabyInfoInputView: View {
 
     private var fieldsCard: some View {
         VStack(spacing: 0) {
-            TextField("Name", text: $babyInfoInputVM.draft.name)
+            TextField("Name", text: $babyInfoInputVM.name)
                 .textContentType(.givenName)
                 .textInputAutocapitalization(.words)
                 .autocorrectionDisabled()
@@ -122,7 +125,7 @@ struct BabyInfoInputView: View {
     }
 
     private var birthdayRow: some View {
-        let birthday = babyInfoInputVM.draft.birthday
+        let birthday = babyInfoInputVM.birthday
 
         return Button {
             activeInput = .birthday
@@ -139,7 +142,7 @@ struct BabyInfoInputView: View {
         .buttonStyle(.plain)
         .sheet(isPresented: isActive(.birthday)) {
             BirthdayPickerSheet(initialDate: birthday) { date in
-                babyInfoInputVM.draft.birthday = date
+                babyInfoInputVM.birthday = date
             }
             .presentationDetents([.medium])
         }
@@ -149,7 +152,8 @@ struct BabyInfoInputView: View {
 
     private var showBirthdayButton: some View {
         Button {
-            // Step 3: present the birthday screen
+            activeInput = nil
+            isShowingBirthday = true
         } label: {
             Text("Show birthday screen")
                 .frame(maxWidth: .infinity)
@@ -181,20 +185,28 @@ struct BabyInfoInputView: View {
 }
 
 #Preview("Empty") {
-    @Previewable @State var vm = BabyInfoInputViewModel(store: InMemoryBabyInfoStore())
+    @Previewable @State var vm = BabyInfoInputViewModel(
+        profile: BabyProfile(store: InMemoryBabyInfoStore())
+    )
 
-    BabyInfoInputView(babyInfoInputVM: vm)
+    NavigationStack {
+        BabyInfoInputView(babyInfoInputVM: vm)
+    }
 }
 
 #Preview("Filled") {
     @Previewable @State var vm = BabyInfoInputViewModel(
-        store: InMemoryBabyInfoStore(
-            draft: BabyInfoDraft(
-                name: "Mia Rose",
-                birthday: Calendar.current.date(byAdding: .month, value: -7, to: .now)
+        profile: BabyProfile(
+            store: InMemoryBabyInfoStore(
+                draft: BabyInfoDraft(
+                    name: "Mia Rose",
+                    birthday: Calendar.current.date(byAdding: .month, value: -7, to: .now)
+                )
             )
         )
     )
 
-    BabyInfoInputView(babyInfoInputVM: vm)
+    NavigationStack {
+        BabyInfoInputView(babyInfoInputVM: vm)
+    }
 }
