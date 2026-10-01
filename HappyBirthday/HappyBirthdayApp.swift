@@ -9,10 +9,11 @@ import SwiftUI
 
 @main
 struct HappyBirthdayApp: App {
+    @State private var babyInfoInputVM = BabyInfoInputViewModel()
+
     var body: some Scene {
         WindowGroup {
-            let vm = BabyInfoInputViewModel()
-            BabyInfoInputView(babyInfoInputVM: vm)
+            BabyInfoInputView(babyInfoInputVM: babyInfoInputVM)
         }
     }
 }
