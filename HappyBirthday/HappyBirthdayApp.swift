@@ -11,7 +11,8 @@ import SwiftUI
 struct HappyBirthdayApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            let vm = BabyInfoInputViewModel()
+            BabyInfoInputView(babyInfoInputVM: vm)
         }
     }
 }
