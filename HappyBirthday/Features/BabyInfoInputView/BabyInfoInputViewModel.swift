@@ -2,34 +2,37 @@
 //  BabyInfoInputViewModel.swift
 //  HappyBirthday
 //
-//  Created by Mit Amin on 9/30/26.
-//
-import SwiftUI
-import PhotosUI
+
+import OSLog
 import UIKit
 
 @MainActor
 @Observable
 final class BabyInfoInputViewModel {
-     var draft: BabyInfoDraft { didSet { persist() } }
-     var image: UIImage?
+    var draft: BabyInfoDraft { didSet { store.saveDraft(draft) } }
+    private(set) var image: UIImage?
 
-     var details: BabyDetails? { BabyDetails(draft: draft) }
-     var canShowBirthday: Bool { details != nil }
+    var details: BabyDetails? { BabyDetails(draft: draft) }
+    var canShowBirthday: Bool { details != nil }
 
-     init(draft: BabyInfoDraft = BabyInfoDraft()) {
-         self.draft = draft
-     }
-    
-    func setImage(from item: PhotosPickerItem?) async {
-        guard let data = try? await item?.loadTransferable(type: Data.self),
-              let image = UIImage(data: data) else { return }
-        self.image = image
-        // Step 2: persist the image
+    @ObservationIgnored private let store: BabyInfoStore
+    @ObservationIgnored private let logger = Logger(subsystem: "HappyBirthday", category: "BabyInfoInput")
+
+    private static let maxImageDimension: CGFloat = 1500
+
+    init(store: BabyInfoStore) {
+        self.store = store
+        self.draft = store.loadDraft()
+        self.image = store.loadImage()
     }
 
-     private func persist() {
-         // Step 2: store.save(draft)
-     }
-    
+    func setImage(_ image: UIImage) {
+        let resized = image.downscaled(toMaxDimension: Self.maxImageDimension)
+        self.image = resized
+        do {
+            try store.saveImage(resized)
+        } catch {
+            logger.error("Failed to save image: \(error)")
+        }
+    }
 }

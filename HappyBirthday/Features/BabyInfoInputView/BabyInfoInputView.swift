@@ -5,59 +5,114 @@
 //  Created by Mit Amin on 9/30/26.
 //
 
-import PhotosUI
 import SwiftUI
 
 struct BabyInfoInputView: View {
     @Bindable var babyInfoInputVM: BabyInfoInputViewModel
-    @State private var pickerItem: PhotosPickerItem?
+
+    @State private var activeInput: ActiveInput?
     @FocusState private var isNameFocused: Bool
 
+    private static let horizontalPadding: CGFloat = 20
+    private static let photoSize: CGFloat = 120
+
+    private enum ActiveInput: Hashable {
+        case name, birthday, photo
+    }
+
     var body: some View {
-        VStack(spacing: 28) {
-            Text("Happy Birthday")
-                .font(.largeTitle.bold())
+        ScrollView {
+            VStack(spacing: 28) {
+                Text("Happy Birthday")
+                    .font(.largeTitle.bold())
+                    .multilineTextAlignment(.center)
 
-            photoPicker
+                photoButton
 
-            fieldsCard
-
-            Spacer()
-
-            Button {
-                // Step 3: present the birthday screen
-            } label: {
-                Text("Show birthday screen")
-                    .frame(maxWidth: .infinity)
+                fieldsCard
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .disabled(!babyInfoInputVM.canShowBirthday)
+            .padding(.horizontal, Self.horizontalPadding)
+            .padding(.top, 24)
+            .frame(maxWidth: .infinity)
+            .background(
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture { activeInput = nil }
+            )
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 24)
-        .background(
-            Color(.systemGroupedBackground)
-                .ignoresSafeArea()
-                .onTapGesture { isNameFocused = false }   // 2. tap outside dismisses
-        )
-        .onChange(of: pickerItem) { _, item in
-            Task { await babyInfoInputVM.setImage(from: item) }
+        .scrollBounceBehavior(.basedOnSize)
+        .scrollDismissesKeyboard(.interactively)
+        .safeAreaInset(edge: .bottom) { showBirthdayButton }
+        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .onChange(of: isNameFocused) { _, focused in
+            if focused {
+                activeInput = .name
+            } else if activeInput == .name {
+                activeInput = nil
+            }
+        }
+        .onChange(of: activeInput) { _, input in
+            isNameFocused = (input == .name)
         }
     }
+
+    // MARK: - Photo
+
+    private var photoButton: some View {
+        Button {
+            activeInput = .photo
+        } label: {
+            photo
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(babyInfoInputVM.image == nil ? "Add baby photo" : "Change baby photo")
+        .photoSourcePicker(isPresented: isActive(.photo)) { image in
+            babyInfoInputVM.setImage(image)
+        }
+    }
+
+    private var photo: some View {
+        Group {
+            if let image = babyInfoInputVM.image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Image(systemName: "person.crop.circle.fill")
+                    .resizable()
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .frame(width: Self.photoSize, height: Self.photoSize)
+        .clipShape(Circle())
+        .overlay(alignment: .bottomTrailing) { cameraBadge }
+    }
+
+    private var cameraBadge: some View {
+        Image(systemName: "camera.fill")
+            .font(.footnote)
+            .foregroundStyle(.white)
+            .padding(8)
+            .background(Color.accentColor, in: Circle())
+            .overlay(Circle().stroke(Color(.systemGroupedBackground), lineWidth: 3))
+            .accessibilityHidden(true)
+    }
+
+    // MARK: - Fields
 
     private var fieldsCard: some View {
         VStack(spacing: 0) {
             TextField("Name", text: $babyInfoInputVM.draft.name)
-                .focused($isNameFocused)
-                .onSubmit { isNameFocused = false }
                 .textContentType(.givenName)
                 .textInputAutocapitalization(.words)
                 .autocorrectionDisabled()
                 .submitLabel(.done)
+                .focused($isNameFocused)
+                .onSubmit { activeInput = nil }
                 .padding(16)
 
-            Divider().padding(.leading, 16)
+            Divider()
+                .padding(.leading, 16)
 
             birthdayRow
                 .padding(16)
@@ -66,55 +121,80 @@ struct BabyInfoInputView: View {
                     in: RoundedRectangle(cornerRadius: 16))
     }
 
-    @ViewBuilder
     private var birthdayRow: some View {
-        if let birthday = babyInfoInputVM.draft.birthday {
-            DatePicker("Birthday",
-                       selection: Binding(get: { birthday },
-                                          set: { babyInfoInputVM.draft.birthday = $0 }),
-                       in: ...Date.now,
-                       displayedComponents: .date)
-        } else {
+        let birthday = babyInfoInputVM.draft.birthday
+
+        return Button {
+            activeInput = .birthday
+        } label: {
             HStack {
                 Text("Birthday")
+                    .foregroundStyle(Color.primary)
                 Spacer()
-                Button("Add birthday") { babyInfoInputVM.draft.birthday = .now }
+                Text(birthday?.formatted(date: .abbreviated, time: .omitted) ?? "Select")
+                    .foregroundStyle(birthday == nil ? Color.secondary : Color.accentColor)
             }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .sheet(isPresented: isActive(.birthday)) {
+            BirthdayPickerSheet(initialDate: birthday) { date in
+                babyInfoInputVM.draft.birthday = date
+            }
+            .presentationDetents([.medium])
         }
     }
 
-    @MainActor
-    private var photoPicker: some View {
-        let selectedImage = babyInfoInputVM.image
+    // MARK: - Show birthday
 
-        return PhotosPicker(selection: $pickerItem, matching: .images) {
-            Group {
-                if let image = selectedImage {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                } else {
-                    Image(systemName: "person.crop.circle.fill")
-                        .resizable()
-                        .foregroundStyle(.tertiary)
+    private var showBirthdayButton: some View {
+        Button {
+            // Step 3: present the birthday screen
+        } label: {
+            Text("Show birthday screen")
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.large)
+        .disabled(!babyInfoInputVM.canShowBirthday)
+        .padding(.horizontal, Self.horizontalPadding)
+        .padding(.vertical, 12)
+        .background(Color(.systemGroupedBackground))
+    }
+
+    // MARK: - Helpers
+
+    /// Presentation binding for one input. Only one input can be active at a time,
+    /// and an input dismissing itself never clears a different input that replaced it.
+    private func isActive(_ input: ActiveInput) -> Binding<Bool> {
+        Binding(
+            get: { activeInput == input },
+            set: { isPresented in
+                if isPresented {
+                    activeInput = input
+                } else if activeInput == input {
+                    activeInput = nil
                 }
             }
-            .frame(width: 120, height: 120)
-            .clipShape(Circle())
-            .overlay(alignment: .bottomTrailing) {
-                Image(systemName: "camera.fill")
-                    .font(.footnote)
-                    .foregroundStyle(.white)
-                    .padding(8)
-                    .background(Color.accentColor, in: Circle())
-                    .overlay(Circle().stroke(Color(.systemGroupedBackground), lineWidth: 3))
-            }
-        }
+        )
     }
 }
 
-#Preview {
-    @Previewable @State var vm = BabyInfoInputViewModel()
+#Preview("Empty") {
+    @Previewable @State var vm = BabyInfoInputViewModel(store: InMemoryBabyInfoStore())
+
+    BabyInfoInputView(babyInfoInputVM: vm)
+}
+
+#Preview("Filled") {
+    @Previewable @State var vm = BabyInfoInputViewModel(
+        store: InMemoryBabyInfoStore(
+            draft: BabyInfoDraft(
+                name: "Mia Rose",
+                birthday: Calendar.current.date(byAdding: .month, value: -7, to: .now)
+            )
+        )
+    )
 
     BabyInfoInputView(babyInfoInputVM: vm)
 }

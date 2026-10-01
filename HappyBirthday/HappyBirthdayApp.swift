@@ -2,14 +2,12 @@
 //  HappyBirthdayApp.swift
 //  HappyBirthday
 //
-//  Created by Mit Amin on 9/30/26.
-//
 
 import SwiftUI
 
 @main
 struct HappyBirthdayApp: App {
-    @State private var babyInfoInputVM = BabyInfoInputViewModel()
+    @State private var babyInfoInputVM = BabyInfoInputViewModel(store: DefaultBabyInfoStore())
 
     var body: some Scene {
         WindowGroup {
