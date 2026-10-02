@@ -8,48 +8,24 @@ import SwiftUI
 struct BirthdayView: View {
     @State private var viewModel: BirthdayViewModel
     @State private var isPhotoSourcePresented = false
-    @State private var shareImage: UIImage?
+    @State private var renderedShare: RenderedShare?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.displayScale) private var displayScale
 
-    init(details: BabyDetails, profile: BabyProfile, theme: BirthdayTheme = .random(), now: Date = .now) {
-        _viewModel = State(initialValue: BirthdayViewModel(details: details, profile: profile,
-                                                           theme: theme, now: now))
-    }
-
-    private enum Layout {
-        static let backButtonSize: CGFloat = 44            // tap target around the 24pt arrow
-        static let backButtonLeading: CGFloat = 16
-        static let backButtonTop: CGFloat = 16
-        static let titleHorizontalInset: CGFloat = 50       // clears the back arrow, keeps text centered
-        static let ageSectionMinSpacing: CGFloat = 20       // flexible: grows on taller screens
-        static let titleToNumber: CGFloat = 13
-        static let numberToUnit: CGFloat = 14
-        static let swirlToNumber: CGFloat = 22
-        static let photoWidthRatio: CGFloat = 275 / 375     // the design's circle on its 375pt frame (≈ 0.733)
-        static let photoMinHorizontalInset: CGFloat = 50    // minimum only: margins grow with the ratio
-        static let cameraIconTapSize: CGFloat = 44          // tap target around the 36pt icon
-        static let cameraIconAngle: Angle = .degrees(45)    // the design's position on the border
-        static let photoToLogo: CGFloat = 15
-        static let logoToShareButton: CGFloat = 53
-        static let shareButtonHeight: CGFloat = 42
-        static let shareButtonToBottom: CGFloat = 53
-        static let shareButtonFontSize: CGFloat = 16
-        static let shareButtonHorizontalPadding: CGFloat = 21
-        static let shareButtonIconSpacing: CGFloat = 8
-        static let textSize: CGFloat = 21
-        static let textTracking: CGFloat = -0.42
-    }
-
-    private enum Layer {
-        case belowIllustration, aboveIllustration
-    }
-
-    private struct ShareRenderKey: Hashable {
+    private struct ShareImageKey: Hashable {
         let width: CGFloat
         let height: CGFloat
         let topInset: CGFloat
-        let imageID: ObjectIdentifier?
+        let imageVersion: Int
+    }
+
+    private struct RenderedShare {
+        let key: ShareImageKey
+        let image: UIImage
+    }
+
+    init(viewModel: BirthdayViewModel) {
+        _viewModel = State(initialValue: viewModel)
     }
 
     var body: some View {
@@ -57,196 +33,49 @@ struct BirthdayView: View {
             let topInset = proxy.safeAreaInsets.top
             let fullSize = CGSize(width: proxy.size.width,
                                   height: proxy.size.height + proxy.safeAreaInsets.top + proxy.safeAreaInsets.bottom)
-            // The photo is 73.3% of the screen width (the design's 275pt on 375pt), so the
-            // side margins grow on wider screens; 50pt is only the minimum.
-            let maxPhotoDiameter = max(0, min(proxy.size.width * Layout.photoWidthRatio,
-                                              proxy.size.width - 2 * Layout.photoMinHorizontalInset))
+            let key = ShareImageKey(width: fullSize.width,
+                                    height: fullSize.height,
+                                    topInset: topInset,
+                                    imageVersion: viewModel.imageVersion)
 
-            screen(topInset: topInset, maxPhotoDiameter: maxPhotoDiameter, includesControls: true)
+            BirthdayCanvas(viewModel: viewModel,
+                           screenWidth: fullSize.width,
+                           topInset: topInset,
+                           actions: actions(shareImage: shareImage(for: key)))
                 .ignoresSafeArea()
-                .task(id: ShareRenderKey(width: fullSize.width, height: fullSize.height, topInset: topInset,
-                                         imageID: viewModel.image.map(ObjectIdentifier.init))) {
-                    shareImage = renderShareImage(size: fullSize, topInset: topInset,
-                                                  maxPhotoDiameter: maxPhotoDiameter)
+                .task(id: key) {
+                    renderedShare = renderShareImage(size: fullSize, topInset: topInset)
+                        .map { RenderedShare(key: key, image: $0) }
                 }
         }
         .toolbar(.hidden, for: .navigationBar)
-        .swipeBackEnabled()   // hiding the bar disables the edge swipe; this restores it
+        .swipeBackEnabled()
         .photoSourcePicker(isPresented: $isPhotoSourcePresented) { image in
             viewModel.setImage(image)
         }
     }
 
-    // MARK: - Layout
-    private func screen(topInset: CGFloat, maxPhotoDiameter: CGFloat, includesControls: Bool) -> some View {
-        ZStack(alignment: .bottom) {
-            viewModel.theme.backgroundColor
-
-            content(.belowIllustration, topInset: topInset, maxPhotoDiameter: maxPhotoDiameter,
-                    includesControls: includesControls)
-
-            illustration
-
-            content(.aboveIllustration, topInset: topInset, maxPhotoDiameter: maxPhotoDiameter,
-                    includesControls: includesControls)
-        }
+    private func actions(shareImage: UIImage?) -> BirthdayCanvas.CanvasActions {
+        BirthdayCanvas.CanvasActions(
+            shareImage: shareImage,
+            onBack: { dismiss() },
+            onChangePhoto: { isPhotoSourcePresented = true }
+        )
     }
 
-    private var illustration: some View {
-        Color.clear
-            .overlay(alignment: .bottom) {
-                Image(viewModel.theme.backgroundImage)
-                    .resizable()
-                    .scaledToFill()
-            }
-            .clipped()
-            .accessibilityHidden(true)
+    private func shareImage(for key: ShareImageKey) -> UIImage? {
+        guard let renderedShare, renderedShare.key == key else { return nil }
+        return renderedShare.image
     }
 
-    private func content(_ layer: Layer, topInset: CGFloat, maxPhotoDiameter: CGFloat,
-                         includesControls: Bool) -> some View {
-        let isAbove = layer == .aboveIllustration
-        let showsControls = isAbove && includesControls
-
-        return VStack(spacing: 0) {
-            Spacer(minLength: Layout.ageSectionMinSpacing)
-
-            ageSection
-                .fixedSize(horizontal: false, vertical: true)
-                .shown(isAbove)
-
-            Spacer(minLength: Layout.ageSectionMinSpacing)
-
-            BirthdayPhotoView(image: viewModel.image, theme: viewModel.theme)
-                .frame(maxWidth: maxPhotoDiameter, maxHeight: maxPhotoDiameter)
-                .layoutPriority(1)   // gets space before the spacers; shrinks only when height runs out
-                .shown(!isAbove)
-                .overlay {
-                    if showsControls {
-                        cameraBadge
-                    }
-                }
-
-            Image(.nanitLogo)
-                .padding(.top, Layout.photoToLogo)
-                .accessibilityHidden(true)
-                .shown(isAbove)
-
-            shareButton
-                .frame(height: Layout.shareButtonHeight)
-                .shown(showsControls)
-                .padding(.top, Layout.logoToShareButton)
-                .padding(.bottom, Layout.shareButtonToBottom)
-        }
-        .padding(.top, topInset)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .overlay(alignment: .topLeading) {
-            if showsControls {
-                backButton
-                    .padding(.top, topInset + Layout.backButtonTop)
-                    .padding(.leading, Layout.backButtonLeading)
-            }
-        }
-    }
-
-    // MARK: - Sharing
-
-    /// The screen without the back, camera and share buttons (spec 5c), at device resolution.
-    private func renderShareImage(size: CGSize, topInset: CGFloat, maxPhotoDiameter: CGFloat) -> UIImage? {
+    private func renderShareImage(size: CGSize, topInset: CGFloat) -> UIImage? {
         let renderer = ImageRenderer(
-            content: screen(topInset: topInset, maxPhotoDiameter: maxPhotoDiameter, includesControls: false)
+            content: BirthdayCanvas(viewModel: viewModel, screenWidth: size.width, topInset: topInset,
+                                    actions: nil)
                 .frame(width: size.width, height: size.height)
         )
         renderer.scale = displayScale
         return renderer.uiImage
-    }
-
-    @ViewBuilder
-    private var shareButton: some View {
-        if let shareImage {
-            let image = Image(uiImage: shareImage)
-            ShareLink(item: image, preview: SharePreview(viewModel.shareTitle, image: image)) {
-                shareButtonLabel
-            }
-        } else {
-            shareButtonLabel
-                .opacity(0.6)
-        }
-    }
-
-    private var shareButtonLabel: some View {
-        HStack(spacing: Layout.shareButtonIconSpacing) {
-            Text("Share the news")
-                .font(.system(size: Layout.shareButtonFontSize, weight: .medium))
-            Image(.icShare)
-        }
-        .foregroundStyle(.white)   // ic_share is a template image, so it turns white too
-        .padding(.horizontal, Layout.shareButtonHorizontalPadding)
-        .frame(height: Layout.shareButtonHeight)
-        .background(Color.birthdayCoral, in: Capsule())
-    }
-
-    // MARK: - Sections
-
-    private var backButton: some View {
-        Button {
-            dismiss()
-        } label: {
-            Image(.icBack)
-                .foregroundStyle(Color.birthdayText)
-                .frame(width: Layout.backButtonSize, height: Layout.backButtonSize)
-                .contentShape(Rectangle())
-        }
-        .accessibilityLabel("Back")
-    }
-
-    private var cameraBadge: some View {
-        GeometryReader { proxy in
-            let diameter = min(proxy.size.width, proxy.size.height)
-            let borderWidth = diameter * BirthdayPhotoView.borderWidthRatio
-            let radius = (diameter - borderWidth) / 2
-            let angle = Layout.cameraIconAngle.radians
-
-            Button {
-                isPhotoSourcePresented = true
-            } label: {
-                Image(viewModel.theme.cameraIcon)
-                    .frame(width: Layout.cameraIconTapSize, height: Layout.cameraIconTapSize)
-                    .contentShape(Circle())
-            }
-            .accessibilityLabel(viewModel.image == nil ? "Add baby photo" : "Change baby photo")
-            .position(x: proxy.size.width / 2 + radius * cos(angle),
-                      y: proxy.size.height / 2 - radius * sin(angle))
-        }
-    }
-
-    private var ageSection: some View {
-        VStack(spacing: 0) {
-            styledText(viewModel.title)
-                .lineLimit(2)
-                .padding(.horizontal, Layout.titleHorizontalInset)
-
-            HStack(spacing: Layout.swirlToNumber) {
-                Image(.swirlLeft)
-                Image(viewModel.age.numberImageName)
-                Image(.swirlRight)
-            }
-            .padding(.top, Layout.titleToNumber)
-
-            styledText(viewModel.age.unitText)
-                .padding(.top, Layout.numberToUnit)
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(viewModel.accessibilityAgeLabel)
-    }
-
-    private func styledText(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: Layout.textSize, weight: .medium))
-            .tracking(Layout.textTracking)
-            .textCase(.uppercase)
-            .multilineTextAlignment(.center)
-            .foregroundStyle(Color.birthdayText)
     }
 }
 
@@ -254,28 +83,28 @@ struct BirthdayView: View {
 
 @MainActor private let previewProfile = BabyProfile(store: InMemoryBabyInfoStore())
 
-private func previewDetails(name: String, monthsOld: Int) -> BabyDetails {
+@MainActor
+private func previewViewModel(name: String, monthsOld: Int, theme: BirthdayTheme) -> BirthdayViewModel {
     let birthday = Calendar.current.date(byAdding: .month, value: -monthsOld, to: .now)!
-    return BabyDetails(name: name, birthday: birthday)!
+    return BirthdayViewModel(details: BabyInfo(name: name, birthday: birthday)!,
+                             profile: previewProfile,
+                             theme: theme)
 }
 
 #Preview("Elephant · 1 month") {
     NavigationStack {
-        BirthdayView(details: previewDetails(name: "Cristiano Ronaldo", monthsOld: 1),
-                     profile: previewProfile, theme: .elephant)
+        BirthdayView(viewModel: previewViewModel(name: "Cristiano Ronaldo", monthsOld: 1, theme: .elephant))
     }
 }
 
 #Preview("Fox · 10 months") {
     NavigationStack {
-        BirthdayView(details: previewDetails(name: "Mia", monthsOld: 10),
-                     profile: previewProfile, theme: .fox)
+        BirthdayView(viewModel: previewViewModel(name: "Mia", monthsOld: 10, theme: .fox))
     }
 }
 
 #Preview("Pelican · 3 years, long name") {
     NavigationStack {
-        BirthdayView(details: previewDetails(name: "Alexandria Catherine Montgomery", monthsOld: 36),
-                     profile: previewProfile, theme: .pelican)
+        BirthdayView(viewModel: previewViewModel(name: "Alexandria Catherine Montgomery", monthsOld: 36, theme: .pelican))
     }
 }

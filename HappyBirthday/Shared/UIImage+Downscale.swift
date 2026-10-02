@@ -6,9 +6,6 @@
 import UIKit
 
 extension UIImage {
-    /// Returns an image whose longest side is at most `maxDimension` pixels.
-    /// Also redraws images that aren't `.up`, which bakes in the orientation
-    /// (camera photos are often stored rotated).
     func downscaled(toMaxDimension maxDimension: CGFloat) -> UIImage {
         let longestSide = max(size.width, size.height)
         guard longestSide > 0,

@@ -9,7 +9,6 @@ struct BirthdayPhotoView: View {
     let image: UIImage?
     let theme: BirthdayTheme
 
-    /// The placeholder art's ring is 7pt wide in a 229pt-wide image.
     static let borderWidthRatio: CGFloat = 7 / 229
 
     var body: some View {

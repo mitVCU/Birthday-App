@@ -5,14 +5,13 @@
 
 import Foundation
 
-enum BabyAge: Equatable {
+enum BabyAge {
     case months(Int)
     case years(Int)
 
     static let maxYears = 12
 
     init(birthday: Date, now: Date = .now, calendar: Calendar = .current) {
-        // Compare calendar days, not timestamps: the picker keeps the time of day it was set.
         let components = calendar.dateComponents([.year, .month],
                                                  from: calendar.startOfDay(for: birthday),
                                                  to: calendar.startOfDay(for: now))
@@ -21,7 +20,6 @@ enum BabyAge: Equatable {
         self = years == 0 ? .months(months) : .years(years)
     }
 
-    /// Birthdays that give an age from 0 months up to `maxYears` (the day before turning 13).
     static func allowedBirthdays(now: Date = .now, calendar: Calendar = .current) -> ClosedRange<Date> {
         let today = calendar.startOfDay(for: now)
         let tooOld = calendar.date(byAdding: .year, value: -(maxYears + 1), to: today) ?? today
@@ -35,7 +33,6 @@ enum BabyAge: Equatable {
         }
     }
 
-    /// "month old", "years old", … (for VoiceOver and anywhere without the "!")
     var unitDescription: String {
         switch self {
         case .months(1): "month old"
@@ -45,7 +42,6 @@ enum BabyAge: Equatable {
         }
     }
 
-    /// Lowercase on purpose: the view uppercases it, so VoiceOver reads normal words.
     var unitText: String { unitDescription + "!" }
 
     var numberImageName: String { "number_\(value)" }

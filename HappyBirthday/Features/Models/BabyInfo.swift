@@ -2,32 +2,32 @@
 //  BabyInfo.swift
 //  HappyBirthday
 //
-//  Created by Mit Amin on 9/30/26.
-//
 
 import Foundation
 
-struct BabyInfoDraft: Codable, Equatable {
+struct BabyInfoDraft: Codable {
     var name: String = ""
     var birthday: Date?
 }
 
-struct BabyDetails: Equatable {
+struct BabyInfo {
     let name: String
     let birthday: Date
 
     init?(name: String, birthday: Date, now: Date = .now, calendar: Calendar = .current) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty,
-              BabyAge.allowedBirthdays(now: now, calendar: calendar).contains(birthday) else { return nil }
+              BabyAge.allowedBirthdays(now: now, calendar: calendar).contains(birthday)
+        else { return nil }
+
         self.name = trimmed
         self.birthday = birthday
     }
 }
 
-extension BabyDetails {
-    init?(draft: BabyInfoDraft, now: Date = .now) {
+extension BabyInfo {
+    init?(draft: BabyInfoDraft) {
         guard let birthday = draft.birthday else { return nil }
-        self.init(name: draft.name, birthday: birthday, now: now)
+        self.init(name: draft.name, birthday: birthday)
     }
 }

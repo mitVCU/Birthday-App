@@ -7,15 +7,16 @@ import SwiftUI
 
 @main
 struct HappyBirthdayApp: App {
-    @State private var babyInfoInputVM = BabyInfoInputViewModel(
+    @State private var inputViewModel = BabyInfoInputViewModel(
         profile: BabyProfile(store: DefaultBabyInfoStore())
     )
 
     var body: some Scene {
         WindowGroup {
             NavigationStack {
-                BabyInfoInputView(babyInfoInputVM: babyInfoInputVM)
+                BabyInfoInputView(viewModel: inputViewModel)
             }
+            .task { await inputViewModel.loadSavedImage() }
         }
     }
 }

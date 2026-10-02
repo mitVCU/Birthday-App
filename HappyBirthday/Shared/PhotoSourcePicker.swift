@@ -3,6 +3,7 @@
 //  HappyBirthday
 //
 
+import OSLog
 import PhotosUI
 import SwiftUI
 
@@ -13,6 +14,9 @@ struct PhotoSourcePicker: ViewModifier {
     @State private var isLibraryPresented = false
     @State private var isCameraPresented = false
     @State private var libraryItem: PhotosPickerItem?
+    @State private var libraryLoad: Task<Void, Never>?
+
+    private static let logger = Logger(subsystem: "HappyBirthday", category: "PhotoSourcePicker")
 
     private var isCameraAvailable: Bool {
         UIImagePickerController.isSourceTypeAvailable(.camera)
@@ -35,14 +39,28 @@ struct PhotoSourcePicker: ViewModifier {
             }
             .onChange(of: libraryItem) { _, item in
                 guard let item else { return }
-                Task {
-                    if let data = try? await item.loadTransferable(type: Data.self),
-                       let image = UIImage(data: data) {
-                        onImagePicked(image)
-                    }
+                libraryLoad?.cancel()
+                libraryLoad = Task {
+                    await loadImage(from: item)
                     libraryItem = nil   // so picking the same photo again still fires onChange
                 }
             }
+    }
+
+    @MainActor
+    private func loadImage(from item: PhotosPickerItem) async {
+        do {
+            guard let data = try await item.loadTransferable(type: Data.self),
+                  let image = UIImage(data: data) else {
+                Self.logger.error("Selected library item had no readable image data")
+                return
+            }
+            guard !Task.isCancelled else { return }
+            onImagePicked(image)
+        } catch {
+            guard !Task.isCancelled else { return }
+            Self.logger.error("Failed to load library photo: \(error)")
+        }
     }
 }
 

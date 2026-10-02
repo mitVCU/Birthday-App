@@ -1,35 +1,41 @@
 //
 //  BabyInfoInputView.swift
 //  HappyBirthday
-//
-//  Created by Mit Amin on 9/30/26.
-//
 
 import SwiftUI
 
 struct BabyInfoInputView: View {
-    @Bindable var babyInfoInputVM: BabyInfoInputViewModel
+    @Bindable var viewModel: BabyInfoInputViewModel
 
     @State private var activeInput: ActiveInput?
     @FocusState private var isNameFocused: Bool
-    @State private var isShowingBirthday = false
-
-    private static let horizontalPadding: CGFloat = 20
-    private static let photoSize: CGFloat = 120
+    @State private var birthdayViewModel: BirthdayViewModel?
 
     private enum ActiveInput: Hashable {
         case name, birthday, photo
     }
 
+    private enum Layout {
+        static let horizontalPadding: CGFloat = 20
+        static let topPadding: CGFloat = 8
+        static let photoToFields: CGFloat = 28
+        static let photoSize: CGFloat = 120
+        static let cameraBadgePadding: CGFloat = 8
+        static let cameraBadgeBorderWidth: CGFloat = 3
+        static let fieldPadding: CGFloat = 16
+        static let cardCornerRadius: CGFloat = 16
+        static let buttonVerticalPadding: CGFloat = 12
+    }
+
     var body: some View {
         ScrollView {
-            VStack(spacing: 28) {
+            VStack(spacing: Layout.photoToFields) {
                 photoButton
 
                 fieldsCard
             }
-            .padding(.horizontal, Self.horizontalPadding)
-            .padding(.top, 8)
+            .padding(.horizontal, Layout.horizontalPadding)
+            .padding(.top, Layout.topPadding)
             .frame(maxWidth: .infinity)
             .background(
                 Color.clear
@@ -42,10 +48,8 @@ struct BabyInfoInputView: View {
         .safeAreaInset(edge: .bottom) { showBirthdayButton }
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
         .navigationTitle("Happy Birthday")
-        .navigationDestination(isPresented: $isShowingBirthday) {
-            if let details = babyInfoInputVM.details {
-                BirthdayView(details: details, profile: babyInfoInputVM.profile)
-            }
+        .navigationDestination(item: $birthdayViewModel) { birthdayViewModel in
+            BirthdayView(viewModel: birthdayViewModel)
         }
         .onChange(of: isNameFocused) { _, focused in
             if focused {
@@ -68,15 +72,15 @@ struct BabyInfoInputView: View {
             photo
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(babyInfoInputVM.image == nil ? "Add baby photo" : "Change baby photo")
+        .accessibilityLabel(viewModel.photoAccessibilityLabel)
         .photoSourcePicker(isPresented: isActive(.photo)) { image in
-            babyInfoInputVM.setImage(image)
+            viewModel.setImage(image)
         }
     }
 
     private var photo: some View {
         Group {
-            if let image = babyInfoInputVM.image {
+            if let image = viewModel.image {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
@@ -86,7 +90,7 @@ struct BabyInfoInputView: View {
                     .foregroundStyle(.tertiary)
             }
         }
-        .frame(width: Self.photoSize, height: Self.photoSize)
+        .frame(width: Layout.photoSize, height: Layout.photoSize)
         .clipShape(Circle())
         .overlay(alignment: .bottomTrailing) { cameraBadge }
     }
@@ -95,9 +99,9 @@ struct BabyInfoInputView: View {
         Image(systemName: "camera.fill")
             .font(.footnote)
             .foregroundStyle(.white)
-            .padding(8)
+            .padding(Layout.cameraBadgePadding)
             .background(Color.accentColor, in: Circle())
-            .overlay(Circle().stroke(Color(.systemGroupedBackground), lineWidth: 3))
+            .overlay(Circle().stroke(Color(.systemGroupedBackground), lineWidth: Layout.cameraBadgeBorderWidth))
             .accessibilityHidden(true)
     }
 
@@ -105,27 +109,27 @@ struct BabyInfoInputView: View {
 
     private var fieldsCard: some View {
         VStack(spacing: 0) {
-            TextField("Name", text: $babyInfoInputVM.name)
+            TextField("Name", text: $viewModel.name)
                 .textContentType(.givenName)
                 .textInputAutocapitalization(.words)
                 .autocorrectionDisabled()
                 .submitLabel(.done)
                 .focused($isNameFocused)
                 .onSubmit { activeInput = nil }
-                .padding(16)
+                .padding(Layout.fieldPadding)
 
             Divider()
-                .padding(.leading, 16)
+                .padding(.leading, Layout.fieldPadding)
 
             birthdayRow
-                .padding(16)
+                .padding(Layout.fieldPadding)
         }
         .background(Color(.secondarySystemGroupedBackground),
-                    in: RoundedRectangle(cornerRadius: 16))
+                    in: RoundedRectangle(cornerRadius: Layout.cardCornerRadius))
     }
 
     private var birthdayRow: some View {
-        let birthday = babyInfoInputVM.birthday
+        let birthday = viewModel.birthday
 
         return Button {
             activeInput = .birthday
@@ -142,7 +146,7 @@ struct BabyInfoInputView: View {
         .buttonStyle(.plain)
         .sheet(isPresented: isActive(.birthday)) {
             BirthdayPickerSheet(initialDate: birthday) { date in
-                babyInfoInputVM.birthday = date
+                viewModel.birthday = date
             }
             .presentationDetents([.medium])
         }
@@ -153,23 +157,21 @@ struct BabyInfoInputView: View {
     private var showBirthdayButton: some View {
         Button {
             activeInput = nil
-            isShowingBirthday = true
+            birthdayViewModel = viewModel.makeBirthdayViewModel()
         } label: {
             Text("Show birthday screen")
                 .frame(maxWidth: .infinity)
         }
         .buttonStyle(.borderedProminent)
         .controlSize(.large)
-        .disabled(!babyInfoInputVM.canShowBirthday)
-        .padding(.horizontal, Self.horizontalPadding)
-        .padding(.vertical, 12)
+        .disabled(!viewModel.canShowBirthday)
+        .padding(.horizontal, Layout.horizontalPadding)
+        .padding(.vertical, Layout.buttonVerticalPadding)
         .background(Color(.systemGroupedBackground))
     }
 
     // MARK: - Helpers
 
-    /// Presentation binding for one input. Only one input can be active at a time,
-    /// and an input dismissing itself never clears a different input that replaced it.
     private func isActive(_ input: ActiveInput) -> Binding<Bool> {
         Binding(
             get: { activeInput == input },
@@ -185,17 +187,17 @@ struct BabyInfoInputView: View {
 }
 
 #Preview("Empty") {
-    @Previewable @State var vm = BabyInfoInputViewModel(
+    @Previewable @State var viewModel = BabyInfoInputViewModel(
         profile: BabyProfile(store: InMemoryBabyInfoStore())
     )
 
     NavigationStack {
-        BabyInfoInputView(babyInfoInputVM: vm)
+        BabyInfoInputView(viewModel: viewModel)
     }
 }
 
 #Preview("Filled") {
-    @Previewable @State var vm = BabyInfoInputViewModel(
+    @Previewable @State var viewModel = BabyInfoInputViewModel(
         profile: BabyProfile(
             store: InMemoryBabyInfoStore(
                 draft: BabyInfoDraft(
@@ -207,6 +209,6 @@ struct BabyInfoInputView: View {
     )
 
     NavigationStack {
-        BabyInfoInputView(babyInfoInputVM: vm)
+        BabyInfoInputView(viewModel: viewModel)
     }
 }

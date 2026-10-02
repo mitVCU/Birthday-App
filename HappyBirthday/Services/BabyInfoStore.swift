@@ -6,7 +6,7 @@
 import OSLog
 import UIKit
 
-protocol BabyInfoStore {
+protocol BabyInfoStore: Sendable {
     func loadDraft() -> BabyInfoDraft
     func saveDraft(_ draft: BabyInfoDraft)
     func loadImage() -> UIImage?
