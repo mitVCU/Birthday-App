@@ -52,7 +52,6 @@ final class BabyProfile {
                 newImage.downscaled(toMaxDimension: Self.maxImageDimension)
             }.value
 
-            // If another photo was picked while this one was resizing, that one wins.
             guard request == latestImageRequest else { return }
             image = resized
             save(resized)
