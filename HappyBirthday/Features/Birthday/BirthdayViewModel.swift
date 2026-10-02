@@ -21,12 +21,13 @@ final class BirthdayViewModel {
         self.profile = profile
     }
 
-    /// Read from the shared profile, so a photo change on either screen shows up on both.
     var image: UIImage? { profile.image }
 
     var title: String { "Today \(name) is" }
 
     var accessibilityAgeLabel: String { "Today \(name) is \(age.value) \(age.unitDescription)" }
+
+    var shareTitle: String { "Today \(name) is \(age.value) \(age.unitDescription)!" }
 
     func setImage(_ image: UIImage) {
         profile.setImage(image)

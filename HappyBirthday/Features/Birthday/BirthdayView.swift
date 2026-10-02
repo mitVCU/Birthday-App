@@ -8,7 +8,9 @@ import SwiftUI
 struct BirthdayView: View {
     @State private var viewModel: BirthdayViewModel
     @State private var isPhotoSourcePresented = false
+    @State private var shareImage: UIImage?
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.displayScale) private var displayScale
 
     init(details: BabyDetails, profile: BabyProfile, theme: BirthdayTheme = .random(), now: Date = .now) {
         _viewModel = State(initialValue: BirthdayViewModel(details: details, profile: profile,
@@ -17,8 +19,8 @@ struct BirthdayView: View {
 
     private enum Layout {
         static let backButtonSize: CGFloat = 44            // tap target around the 24pt arrow
-        static let backButtonLeading: CGFloat = 4
-        static let backButtonTop: CGFloat = 6
+        static let backButtonLeading: CGFloat = 16
+        static let backButtonTop: CGFloat = 16
         static let titleHorizontalInset: CGFloat = 50       // clears the back arrow, keeps text centered
         static let ageSectionMinSpacing: CGFloat = 20       // flexible: grows on taller screens
         static let titleToNumber: CGFloat = 13
@@ -30,45 +32,43 @@ struct BirthdayView: View {
         static let cameraIconAngle: Angle = .degrees(45)    // the design's position on the border
         static let photoToLogo: CGFloat = 15
         static let logoToShareButton: CGFloat = 53
-        static let shareButtonHeight: CGFloat = 42 // placeholder
+        static let shareButtonHeight: CGFloat = 42
         static let shareButtonToBottom: CGFloat = 53
+        static let shareButtonFontSize: CGFloat = 16
+        static let shareButtonHorizontalPadding: CGFloat = 21
+        static let shareButtonIconSpacing: CGFloat = 8
         static let textSize: CGFloat = 21
         static let textTracking: CGFloat = -0.42
     }
 
-    /// The photo sits under the illustration (the art overlaps it, as in the design);
-    /// the text, logo and buttons sit over it.
     private enum Layer {
         case belowIllustration, aboveIllustration
     }
 
+    private struct ShareRenderKey: Hashable {
+        let width: CGFloat
+        let height: CGFloat
+        let topInset: CGFloat
+        let imageID: ObjectIdentifier?
+    }
+
     var body: some View {
-        // The reader itself respects the safe area so it can measure the status bar;
-        // only the layers inside it extend to the screen edges.
         GeometryReader { proxy in
-            let statusBarHeight = proxy.safeAreaInsets.top
+            let topInset = proxy.safeAreaInsets.top
+            let fullSize = CGSize(width: proxy.size.width,
+                                  height: proxy.size.height + proxy.safeAreaInsets.top + proxy.safeAreaInsets.bottom)
             // The photo is 73.3% of the screen width (the design's 275pt on 375pt), so the
             // side margins grow on wider screens; 50pt is only the minimum.
             let maxPhotoDiameter = max(0, min(proxy.size.width * Layout.photoWidthRatio,
                                               proxy.size.width - 2 * Layout.photoMinHorizontalInset))
 
-            ZStack(alignment: .bottom) {
-                viewModel.theme.backgroundColor
-
-                content(.belowIllustration, topInset: statusBarHeight, maxPhotoDiameter: maxPhotoDiameter)
-
-                Color.clear
-                    .overlay(alignment: .bottom) {
-                        Image(viewModel.theme.backgroundImage)
-                            .resizable()
-                            .scaledToFill()
-                    }
-                    .clipped()
-                    .accessibilityHidden(true)
-
-                content(.aboveIllustration, topInset: statusBarHeight, maxPhotoDiameter: maxPhotoDiameter)
-            }
-            .ignoresSafeArea()
+            screen(topInset: topInset, maxPhotoDiameter: maxPhotoDiameter, includesControls: true)
+                .ignoresSafeArea()
+                .task(id: ShareRenderKey(width: fullSize.width, height: fullSize.height, topInset: topInset,
+                                         imageID: viewModel.image.map(ObjectIdentifier.init))) {
+                    shareImage = renderShareImage(size: fullSize, topInset: topInset,
+                                                  maxPhotoDiameter: maxPhotoDiameter)
+                }
         }
         .toolbar(.hidden, for: .navigationBar)
         .swipeBackEnabled()   // hiding the bar disables the edge swipe; this restores it
@@ -78,14 +78,37 @@ struct BirthdayView: View {
     }
 
     // MARK: - Layout
+    private func screen(topInset: CGFloat, maxPhotoDiameter: CGFloat, includesControls: Bool) -> some View {
+        ZStack(alignment: .bottom) {
+            viewModel.theme.backgroundColor
 
-    /// The full screen layout. It's built once per layer with identical spacing,
-    /// and each layer shows only its own elements, so both line up exactly.
-    private func content(_ layer: Layer, topInset: CGFloat, maxPhotoDiameter: CGFloat) -> some View {
+            content(.belowIllustration, topInset: topInset, maxPhotoDiameter: maxPhotoDiameter,
+                    includesControls: includesControls)
+
+            illustration
+
+            content(.aboveIllustration, topInset: topInset, maxPhotoDiameter: maxPhotoDiameter,
+                    includesControls: includesControls)
+        }
+    }
+
+    private var illustration: some View {
+        Color.clear
+            .overlay(alignment: .bottom) {
+                Image(viewModel.theme.backgroundImage)
+                    .resizable()
+                    .scaledToFill()
+            }
+            .clipped()
+            .accessibilityHidden(true)
+    }
+
+    private func content(_ layer: Layer, topInset: CGFloat, maxPhotoDiameter: CGFloat,
+                         includesControls: Bool) -> some View {
         let isAbove = layer == .aboveIllustration
+        let showsControls = isAbove && includesControls
 
         return VStack(spacing: 0) {
-            // Two equal spacers center the age section between the status bar and the photo.
             Spacer(minLength: Layout.ageSectionMinSpacing)
 
             ageSection
@@ -99,7 +122,7 @@ struct BirthdayView: View {
                 .layoutPriority(1)   // gets space before the spacers; shrinks only when height runs out
                 .shown(!isAbove)
                 .overlay {
-                    if isAbove {
+                    if showsControls {
                         cameraBadge
                     }
                 }
@@ -109,21 +132,58 @@ struct BirthdayView: View {
                 .accessibilityHidden(true)
                 .shown(isAbove)
 
-            // Step 5: the "Share the news" button takes this slot.
-            Color.clear
+            shareButton
                 .frame(height: Layout.shareButtonHeight)
+                .shown(showsControls)
                 .padding(.top, Layout.logoToShareButton)
                 .padding(.bottom, Layout.shareButtonToBottom)
         }
         .padding(.top, topInset)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay(alignment: .topLeading) {
-            if isAbove {
+            if showsControls {
                 backButton
                     .padding(.top, topInset + Layout.backButtonTop)
                     .padding(.leading, Layout.backButtonLeading)
             }
         }
+    }
+
+    // MARK: - Sharing
+
+    /// The screen without the back, camera and share buttons (spec 5c), at device resolution.
+    private func renderShareImage(size: CGSize, topInset: CGFloat, maxPhotoDiameter: CGFloat) -> UIImage? {
+        let renderer = ImageRenderer(
+            content: screen(topInset: topInset, maxPhotoDiameter: maxPhotoDiameter, includesControls: false)
+                .frame(width: size.width, height: size.height)
+        )
+        renderer.scale = displayScale
+        return renderer.uiImage
+    }
+
+    @ViewBuilder
+    private var shareButton: some View {
+        if let shareImage {
+            let image = Image(uiImage: shareImage)
+            ShareLink(item: image, preview: SharePreview(viewModel.shareTitle, image: image)) {
+                shareButtonLabel
+            }
+        } else {
+            shareButtonLabel
+                .opacity(0.6)
+        }
+    }
+
+    private var shareButtonLabel: some View {
+        HStack(spacing: Layout.shareButtonIconSpacing) {
+            Text("Share the news")
+                .font(.system(size: Layout.shareButtonFontSize, weight: .medium))
+            Image(.icShare)
+        }
+        .foregroundStyle(.white)   // ic_share is a template image, so it turns white too
+        .padding(.horizontal, Layout.shareButtonHorizontalPadding)
+        .frame(height: Layout.shareButtonHeight)
+        .background(Color.birthdayCoral, in: Capsule())
     }
 
     // MARK: - Sections
@@ -140,7 +200,6 @@ struct BirthdayView: View {
         .accessibilityLabel("Back")
     }
 
-    /// Camera icon centered on the photo's border line at 45°.
     private var cameraBadge: some View {
         GeometryReader { proxy in
             let diameter = min(proxy.size.width, proxy.size.height)
