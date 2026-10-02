@@ -9,7 +9,6 @@ enum BabyAge: Equatable {
     case months(Int)
     case years(Int)
 
-    /// Oldest age the birthday screen supports (there are number assets for 0–12).
     static let maxYears = 12
 
     init(birthday: Date, now: Date = .now, calendar: Calendar = .current) {

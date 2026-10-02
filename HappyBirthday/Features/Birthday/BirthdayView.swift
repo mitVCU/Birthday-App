@@ -7,6 +7,7 @@ import SwiftUI
 
 struct BirthdayView: View {
     @State private var viewModel: BirthdayViewModel
+    @State private var isPhotoSourcePresented = false
     @Environment(\.dismiss) private var dismiss
 
     init(details: BabyDetails, profile: BabyProfile, theme: BirthdayTheme = .random(), now: Date = .now) {
@@ -25,9 +26,11 @@ struct BirthdayView: View {
         static let swirlToNumber: CGFloat = 22
         static let photoWidthRatio: CGFloat = 275 / 375     // the design's circle on its 375pt frame (≈ 0.733)
         static let photoMinHorizontalInset: CGFloat = 50    // minimum only: margins grow with the ratio
+        static let cameraIconTapSize: CGFloat = 44          // tap target around the 36pt icon
+        static let cameraIconAngle: Angle = .degrees(45)    // the design's position on the border
         static let photoToLogo: CGFloat = 15
         static let logoToShareButton: CGFloat = 53
-        static let shareButtonHeight: CGFloat = 42
+        static let shareButtonHeight: CGFloat = 42 // placeholder
         static let shareButtonToBottom: CGFloat = 53
         static let textSize: CGFloat = 21
         static let textTracking: CGFloat = -0.42
@@ -69,6 +72,9 @@ struct BirthdayView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .swipeBackEnabled()   // hiding the bar disables the edge swipe; this restores it
+        .photoSourcePicker(isPresented: $isPhotoSourcePresented) { image in
+            viewModel.setImage(image)
+        }
     }
 
     // MARK: - Layout
@@ -92,6 +98,11 @@ struct BirthdayView: View {
                 .frame(maxWidth: maxPhotoDiameter, maxHeight: maxPhotoDiameter)
                 .layoutPriority(1)   // gets space before the spacers; shrinks only when height runs out
                 .shown(!isAbove)
+                .overlay {
+                    if isAbove {
+                        cameraBadge
+                    }
+                }
 
             Image(.nanitLogo)
                 .padding(.top, Layout.photoToLogo)
@@ -127,6 +138,27 @@ struct BirthdayView: View {
                 .contentShape(Rectangle())
         }
         .accessibilityLabel("Back")
+    }
+
+    /// Camera icon centered on the photo's border line at 45°.
+    private var cameraBadge: some View {
+        GeometryReader { proxy in
+            let diameter = min(proxy.size.width, proxy.size.height)
+            let borderWidth = diameter * BirthdayPhotoView.borderWidthRatio
+            let radius = (diameter - borderWidth) / 2
+            let angle = Layout.cameraIconAngle.radians
+
+            Button {
+                isPhotoSourcePresented = true
+            } label: {
+                Image(viewModel.theme.cameraIcon)
+                    .frame(width: Layout.cameraIconTapSize, height: Layout.cameraIconTapSize)
+                    .contentShape(Circle())
+            }
+            .accessibilityLabel(viewModel.image == nil ? "Add baby photo" : "Change baby photo")
+            .position(x: proxy.size.width / 2 + radius * cos(angle),
+                      y: proxy.size.height / 2 - radius * sin(angle))
+        }
     }
 
     private var ageSection: some View {

@@ -27,4 +27,8 @@ final class BirthdayViewModel {
     var title: String { "Today \(name) is" }
 
     var accessibilityAgeLabel: String { "Today \(name) is \(age.value) \(age.unitDescription)" }
+
+    func setImage(_ image: UIImage) {
+        profile.setImage(image)
+    }
 }

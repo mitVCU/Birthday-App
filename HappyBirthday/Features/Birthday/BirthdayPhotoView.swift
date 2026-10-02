@@ -5,8 +5,6 @@
 
 import SwiftUI
 
-/// The round baby photo. Shows the theme's placeholder until a photo is chosen,
-/// and draws a ring around a real photo that matches the placeholder's ring.
 struct BirthdayPhotoView: View {
     let image: UIImage?
     let theme: BirthdayTheme
